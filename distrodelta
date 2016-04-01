@@ -1,34 +1,51 @@
 #!/usr/bin/python
+import subprocess
 import apt_pkg
+
 apt_pkg.init_config()
 apt_pkg.init_system()
 cache = apt_pkg.Cache()
 result = {}
-origin = {}
+installed = "install ok installed"
 
-installed="install ok installed"
+class PackageInfo:
+    def __init__(self, name, tagfile):
+        self.pkg = cache[name]
+        self.version = tagfile.section.get("Version")
+        self.source = tagfile.section.get("Source")
+        self.binary = name
+        if not self.pkg.has_versions:
+            return
+        self.filelist = self.pkg.version_list[0].file_list
+        self.archive = self.filelist[0][0].archive
 
-tagfile= apt_pkg.TagFile('/var/lib/dpkg/status')
-while tagfile.step() == 1:
-    status=tagfile.section.get("Status")
-    name=tagfile.section.get("Package")
-    if status == installed and name in cache:
-        pkg=cache[name]
-        installed_version=tagfile.section.get("Version")
-        source=tagfile.section.get("Source")
-        if source in result:
-            continue
-        filelist = pkg.version_list[0].file_list
-        archive=filelist[0][0].archive
-        if archive == "stable":
-            continue
-        if source == None:
-            result[name]=installed_version
-            origin[name]=archive
+    def getName(self):
+        if self.source == None:
+            return self.binary
         else:
-            result[source]=installed_version
-            origin[source]=archive
+            return self.source
+
+    def getDistro(self):
+        if hasattr(self, 'archive'):
+            return self.archive
+        else:
+            return None
+
+distromap = { 'stretch' : 'testing', 'jessie' : 'stable', 'sid' : 'unstable'}
+basedistro = subprocess.check_output(['lsb_release', '-c', '-s']).rstrip()
+if basedistro in distromap.keys():
+    basedistro=distromap[basedistro]
+
+tagfile = apt_pkg.TagFile('/var/lib/dpkg/status')
+while tagfile.step() == 1:
+    status = tagfile.section.get("Status")
+    name   = tagfile.section.get("Package")
+    if status == installed and name in cache:
+        p = PackageInfo(name, tagfile)
+        if p.getDistro() != basedistro:
+            result[p.getName()] = p
 
 
-for source in sorted(result.keys()):
-    print "%s: from %s, %s" % (source, origin[source], result[source])
+for name in sorted(result.keys()):
+    p = result[name]
+    print "%s: from %s, %s" % (name, p.getDistro(), p.version)
