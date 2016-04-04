@@ -30,6 +30,22 @@ class PackageInfo:
         self.origin = self.filelist[0][0].origin
         self.site = self.filelist[0][0].site
 
+    def printChangelog(self):
+        changesfile = "/usr/share/doc/"+self.binary+"/changelog.Debian.gz"
+        if len(self.pkg.version_list) == 1:
+            changes = subprocess.check_output(['echo', 'dpkg-parsechangelog',
+                '-l', changesfile])
+            return
+        oldver="0"
+        for ver in self.pkg.version_list:
+            if apt_pkg.version_compare(ver.ver_str, self.version) == 0:
+                continue
+            if apt_pkg.version_compare(ver.ver_str, oldver) > 0:
+                oldver=ver.ver_str
+        changes = subprocess.check_output(['echo', 'dpkg-parsechangelog',
+            '-l', changesfile  , '-s', oldver])
+        print changes
+
     def getName(self, binary):
         if self.source == None or binary:
             return self.binary
@@ -50,11 +66,11 @@ class PackageInfo:
 def main():
     parser = argparse.ArgumentParser(
             description='Print packages not part of base distro')
-    parser.add_argument('-o', '--origin',
+    parser.add_argument('-o', '--origin', nargs='+',
             help='Filter by origin')
-    parser.add_argument('-d', '--distro',
+    parser.add_argument('-d', '--distro', nargs='+',
             help='Filter by distro codename')
-    parser.add_argument('-s', '--site',
+    parser.add_argument('-s', '--site', nargs='+',
             help='Filter by download site')
     parser.add_argument('-b', '--binaries', action='store_true',
             help='Print out binary package names')
@@ -65,7 +81,7 @@ def main():
     if (arguments.origin is None and
         arguments.distro  is None and
         arguments.site is None):
-        arguments.origin = 'Debian'
+        arguments.origin = ['Debian']
     bins=arguments.binaries
 
     tagfile = apt_pkg.TagFile('/var/lib/dpkg/status')
@@ -75,18 +91,22 @@ def main():
         if status == installed and name in cache:
             p = PackageInfo(name, tagfile)
             if arguments.origin != None:
-                if p.origin != arguments.origin:
+                if p.origin not in arguments.origin:
                     result[p.getName(bins)] = p
             elif arguments.distro != None:
-                if p.archive != arguments.distro:
+                if p.archive not in arguments.distro:
                     result[p.getName(bins)] = p
             elif arguments.site != None:
-                if p.site != arguments.site:
+                if p.site not in arguments.site:
                     result[p.getName(bins)] = p
 
     for name in sorted(result.keys()):
         p = result[name]
-        print "%s: from %s, %s" % (name, p.getReason(arguments), p.version)
+        if arguments.changelogs:
+            print "=========================================================="
+            p.printChangelog()
+        else:
+            print "%s: from %s, %s" % (name, p.getReason(arguments), p.version)
 
 if __name__ == "__main__":
         main()
