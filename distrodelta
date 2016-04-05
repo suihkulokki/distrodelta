@@ -6,7 +6,7 @@ import os.path
 
 apt_pkg.init_config()
 apt_pkg.init_system()
-cache = apt_pkg.Cache()
+cache = apt_pkg.Cache(None)
 result = {}
 installed = "install ok installed"
 distromap = { 'stretch' : 'testing', 'jessie' : 'stable', 'sid' : 'unstable'}
