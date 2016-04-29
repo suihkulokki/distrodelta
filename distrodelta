@@ -40,20 +40,23 @@ class PackageInfo:
         if not os.path.exists(changesfile):
             changesfile = "/usr/share/doc/"+self.binary+"/changelog.gz"
             if not os.path.exists(changesfile):
-                print "changelog missing"
+                print "%s: changelog missing" % (self.binary)
                 return
+        localver = subprocess.check_output(['dpkg-parsechangelog',
+            '--file', changesfile, "-SVersion"]).rstrip()
 
-        if len(self.pkg.version_list) == 1:
+        for ver in self.pkg.version_list:
+            if apt_pkg.version_compare(ver.ver_str, localver) >= 0:
+                continue
+            if apt_pkg.version_compare(ver.ver_str, oldver) > 0:
+                oldver=ver.ver_str
+        if oldver == "0" or oldver == localver:
             changes = subprocess.check_output(['dpkg-parsechangelog',
                 '--file', changesfile])
         else:
-            for ver in self.pkg.version_list:
-                if apt_pkg.version_compare(ver.ver_str, self.version) == 0:
-                    continue
-                if apt_pkg.version_compare(ver.ver_str, oldver) > 0:
-                    oldver=ver.ver_str
             changes = subprocess.check_output(['dpkg-parsechangelog',
                 '--file', changesfile  , '--since', oldver])
+
         print changes
 
     def getName(self, binary):
